@@ -74,4 +74,4 @@ Read the [test evidence](docs/evidence.md), [OpenAPI contract](api/openapi.yaml)
 
 The Sepolia token is freely mintable and has no monetary value. The contracts have no independent security audit and must not receive real assets. The service never holds wallet keys; webhook delivery is at least once and consumers must deduplicate events. Confirmation counts do not make chain history irreversible. Production custody, operations, and traffic testing remain outside this repository.
 
-Apache-2.0. See [LICENSE](LICENSE).
+MIT License. See [LICENSE](LICENSE).
