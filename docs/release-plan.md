@@ -34,7 +34,7 @@ sidecar.chmod(0o600)
 PYCODE
 ```
 
-Keep the RPC URL and API key in a local secret store or environment, never in a command argument that is logged, a repository file, or a CI artifact. The sidecar contains only public identifiers and is excluded from Git. Run `make verify` after the exact commit has a completed successful CI workflow in the selected repository. Until this copy is published and CI completes there, the strict gate remains pending; `make local-verify` is the reproducible local gate.
+Keep the RPC URL and API key in a local secret store or environment, never in a command argument that is logged, a repository file, or a CI artifact. The sidecar contains only public identifiers and is excluded from Git. Run `make verify` after the exact commit has a completed successful CI workflow in the selected repository. The strict gate remains pending until CI, sidecar, and read-only external checks all pass; `make local-verify` is the reproducible local gate.
 
 ## What the live check proves
 

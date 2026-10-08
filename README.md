@@ -10,9 +10,10 @@ A successful wallet transaction is not the whole story: a chain can reorganize, 
 flowchart LR
   M[Merchant] --> API[Go payment API]
   API --> DB[(PostgreSQL intents and outbox)]
-  API --> W[Unsigned wallet calldata]
+  API --> U[Unsigned transaction calldata]
+  U --> W[Payer or operator wallet]
   W --> C[PaymentEscrow on EVM]
-  C --> I[Canonical log indexer]
+  C --> I[Canonical indexer and reorg reconciliation]
   I --> DB
   DB --> H[HMAC webhook dispatcher]
   H --> M
@@ -38,8 +39,8 @@ The [protocol specification](SPEC.md), [architecture](docs/architecture.md), and
 Install Go 1.27.1, PostgreSQL 18 server tools, Foundry (`anvil`, `forge`), Python 3, `jq`, `curl`, and `openssl`. The local scenario starts disposable services and never sends a Sepolia transaction.
 
 ```sh
-git clone <repository-url> FinalSettleKit
-cd FinalSettleKit
+git clone https://github.com/demo-lenoir/SettleKit.git SettleKit
+cd SettleKit
 go mod download
 make anvil-test
 go test ./...
@@ -47,9 +48,9 @@ go test ./...
 
 The scenario creates and funds intents, confirms them, releases and refunds separate escrows, verifies signed webhooks, restarts the service, tests reorganization reconciliation, and checks RPC failover. Follow the [demo guide](docs/demo.md) for its assertions. `make db-test` and `make contract-verify` provide focused checks.
 
-### Release verification
+### Verification status
 
-`make local-verify` is the complete **local** gate: Go tests and race/fuzz smoke, PostgreSQL integration, Foundry tests, Slither, Anvil behavior, clean-clone replay, vulnerability scans, SBOM, and image metadata. The separate `make verify` also requires the current commit to be published, hosted CI for that exact commit, live Sepolia/Etherscan checks, and a release sidecar. That final publication gate is intentionally pending until those external artifacts exist; see the [release plan](docs/release-plan.md). A local pass must not be presented as hosted CI evidence.
+The complete **local** gate, `make local-verify`, passes for this source tree. It covers Go tests and race/fuzz smoke, PostgreSQL integration, Foundry tests, Slither, Anvil behavior, clean-clone replay, vulnerability scans, SBOM, and image metadata. The stricter `make verify` also requires hosted CI for the exact published commit, a release sidecar, and read-only Sepolia/Etherscan checks. Its status remains pending until those external checks pass; see the [release plan](docs/release-plan.md). A local pass is not hosted CI evidence.
 
 ## Sepolia evidence
 

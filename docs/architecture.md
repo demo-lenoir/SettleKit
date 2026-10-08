@@ -1,6 +1,6 @@
 # Architecture
 
-See the [payment flow](../README.md#how-a-payment-moves) in the README. The wallet is the only transaction signer. The API owns authenticated intent/operation requests and durable idempotency. PostgreSQL owns intent state, unique observations, canonical blocks/checkpoint, and outbox in transaction boundaries. The watcher imports ordered block headers and escrow logs with configured confirmations. The bounded dispatcher sends signed webhooks after commit.
+See the [payment lifecycle](../README.md#payment-lifecycle) in the README. The wallet is the only transaction signer. The API owns authenticated intent/operation requests and durable idempotency. PostgreSQL owns intent state, unique observations, canonical blocks/checkpoint, and outbox in transaction boundaries. The watcher imports ordered block headers and escrow logs with configured confirmations. The bounded dispatcher sends signed webhooks after commit.
 
 Money state is inferred from canonical contract events. HTTP acceptance and transaction submission are only requests or observations. The system can reverse a previously confirmed off-chain status after a reorg and emits a compensating notification. Automatic reconciliation stops beyond the configured maximum depth.
 
