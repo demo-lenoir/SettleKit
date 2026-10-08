@@ -1,0 +1,3 @@
+PaymentEscrowTest:testCreateAndReleaseExactlyOnce() (gas: 341071)
+PaymentEscrowTest:testEarlyRefundAndTerminalExclusivity() (gas: 252390)
+PaymentEscrowTest:testExpiryBoundaryAndPermissionlessRefund() (gas: 305525)

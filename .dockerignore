@@ -1,0 +1,17 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+contracts
+docs
+api
+scripts
+*.pdf
+*.txt
+README.md
+SPEC.md
+CHANGELOG.md
+CONTRIBUTING.md
+LICENSE
+SECURITY.md

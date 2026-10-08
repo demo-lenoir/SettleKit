@@ -1,0 +1,228 @@
+openapi: 3.1.0
+info:
+  title: SettleKit API
+  version: 0.1.0
+  description: Authenticated payment-intent and unsigned operator wallet API with liveness, readiness, and Prometheus metrics.
+servers:
+  - url: http://localhost:8080
+security:
+  - merchantBearer: []
+paths:
+  /v1/payment-intents:
+    post:
+      operationId: createPaymentIntent
+      summary: Create a USDC escrow payment intent
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIntentRequest'
+      responses:
+        '201':
+          description: Intent and unsigned payer wallet transaction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Intent'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payment-intents/{id}:
+    get:
+      operationId: getPaymentIntent
+      summary: Get state and canonical chain evidence
+      parameters:
+        - $ref: '#/components/parameters/IntentId'
+      responses:
+        '200':
+          description: Payment intent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Intent'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payment-intents/{id}/release:
+    post:
+      operationId: requestRelease
+      summary: Return unsigned release call for an authorized operator wallet
+      security:
+        - operatorBearer: []
+      parameters:
+        - $ref: '#/components/parameters/IntentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          $ref: '#/components/responses/UnsignedCall'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payment-intents/{id}/refund:
+    post:
+      operationId: requestRefund
+      summary: Return unsigned operator refund call
+      security:
+        - operatorBearer: []
+      parameters:
+        - $ref: '#/components/parameters/IntentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          $ref: '#/components/responses/UnsignedCall'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/health/live:
+    get:
+      operationId: liveness
+      security: []
+      responses:
+        '200':
+          description: Process is alive
+  /v1/health/ready:
+    get:
+      operationId: readiness
+      security: []
+      responses:
+        '200':
+          description: Dependencies and chain sync are healthy
+        '503':
+          $ref: '#/components/responses/Error'
+  /metrics:
+    get:
+      operationId: metrics
+      security: []
+      responses:
+        '200':
+          description: Prometheus exposition format
+components:
+  securitySchemes:
+    merchantBearer:
+      type: http
+      scheme: bearer
+    operatorBearer:
+      type: http
+      scheme: bearer
+  parameters:
+    IntentId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 128
+        pattern: '^[A-Za-z0-9._:-]+$'
+  responses:
+    Error:
+      description: Machine-readable error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: Idempotency or state conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    UnsignedCall:
+      description: Request accepted; wallet must sign and submit separately
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UnsignedCall'
+  schemas:
+    CreateIntentRequest:
+      type: object
+      additionalProperties: false
+      required: [payer, payee, amount_base_units, expires_at]
+      properties:
+        payer:
+          type: string
+          pattern: '^0x[0-9a-fA-F]{40}$'
+        payee:
+          type: string
+          pattern: '^0x[0-9a-fA-F]{40}$'
+        amount_base_units:
+          type: string
+          pattern: '^[1-9][0-9]*$'
+        expires_at:
+          type: string
+          format: date-time
+          description: UTC timestamp at whole-second precision; fractional seconds are rejected.
+    UnsignedCall:
+      type: object
+      required: [chain_id, to, data, value]
+      properties:
+        chain_id:
+          type: integer
+          format: int64
+        to:
+          type: string
+          pattern: '^0x[0-9a-fA-F]{40}$'
+        data:
+          type: string
+          pattern: '^0x[0-9a-fA-F]*$'
+        value:
+          type: string
+          const: '0'
+    Intent:
+      type: object
+      required: [id, escrow_id, status, amount_base_units, token, payer, payee, expires_at, payer_call]
+      properties:
+        id:
+          type: string
+          format: uuid
+        escrow_id:
+          type: string
+          pattern: '^0x[0-9a-fA-F]{64}$'
+        status:
+          type: string
+          enum: [CREATED, AWAITING_CHAIN, OBSERVED, CONFIRMING, CONFIRMED, REORGED, RELEASED, REFUNDED, EXPIRED, FAILED]
+        amount_base_units:
+          type: string
+        token:
+          type: string
+        payer:
+          type: string
+        payee:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        payer_call:
+          $ref: '#/components/schemas/UnsignedCall'
+        chain_evidence:
+          type: object
+          additionalProperties: false
+          properties:
+            block_hash:
+              type: string
+              pattern: '^0x[0-9a-fA-F]{64}$'
+            tx_hash:
+              type: string
+              pattern: '^0x[0-9a-fA-F]{64}$'
+    Error:
+      type: object
+      required: [code, message, request_id]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        request_id:
+          type: string

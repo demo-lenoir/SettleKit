@@ -1,0 +1,3 @@
+# Contributing
+
+Read `SPEC.md`, `docs/threat-model.md`, and the relevant ADRs before changing payment, authorization, signing, indexing, or delivery behavior. Add a focused change with tests for its failure modes. Do not weaken tests or scans, and do not commit secrets. Run the relevant tests, then `make local-verify`. The strict, read-only `make verify` also requires live Sepolia and Etherscan access, successful CI for the exact HEAD, and local `docs/release-evidence.json`; see `docs/release-plan.md`. Record actual commands and results in `docs/evidence.md`. Security-sensitive changes require an ADR and review of authorization, custody, replay, and recovery.

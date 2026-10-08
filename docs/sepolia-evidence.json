@@ -1,0 +1,38 @@
+{
+  "chain_id": 11155111,
+  "token_address": "0xA119A6483116208EC8E8823c35566AeD782bE2bA",
+  "escrow_address": "0x9c8C9e0507f837c7F38b24EDD90B49c4842F4a17",
+  "token_deployment_tx": "0x676b183a2763a5743182f13f659672c915d07968948166db0b771db37234d7c1",
+  "deployment_tx": "0x2a6d8ef9536b66d5999b78bfae829ff7a158235ade3922ff715449eeb3ff6adc",
+  "create_tx": "0x53e5ba6df3f7e23cc41978ab084dfcca32df5f6de8a04966b641a35ae1e24b25",
+  "release_tx": "0x2eb595f29f622cff21889bc3d80a56f665510350bcdf789d218d7589c3ddabe2",
+  "refund_tx": "0xa19b1b3159461762a904a9c5e7b7e35e3d95126e6ff5359b431c135e2c5a209d",
+  "verified_source_url": "https://sepolia.etherscan.io/address/0x9c8C9e0507f837c7F38b24EDD90B49c4842F4a17#code",
+  "github_repository": "demo-lenoir/SettleKit",
+  "schema_version": 3,
+  "confirmations": 6,
+  "operator_address": "0x395D05661A21b679ef7d6EeA2910156AA3867aB1",
+  "token_verified_source_url": "https://sepolia.etherscan.io/address/0xA119A6483116208EC8E8823c35566AeD782bE2bA#code",
+  "scenarios": {
+    "release": {
+      "intent_id": "d07612c5-0741-49ac-bc41-ef8954f67fb0",
+      "escrow_id": "0xf08e129ed42653680d5e063b1026acae56d87cb32bfbd2b37a3c01c5ee4d2a70",
+      "payer": "0x7062bBc8fAE519d80278c47EbcD0449ACc373c4C",
+      "payee": "0xb5591f7fF0d02E026DC7cB8C7d057490Fa9a3f62",
+      "amount_base_units": "1000000",
+      "expires_at_unix": 1791004581,
+      "fund_tx": "0x53e5ba6df3f7e23cc41978ab084dfcca32df5f6de8a04966b641a35ae1e24b25",
+      "terminal_tx": "0x2eb595f29f622cff21889bc3d80a56f665510350bcdf789d218d7589c3ddabe2"
+    },
+    "refund": {
+      "intent_id": "3eb20f3d-cede-4d3b-b89b-e76d7f29aa9e",
+      "escrow_id": "0x766752a5fa598e06043e14ba356d8371d4121bf116bcaf69081960193152c734",
+      "payer": "0x7062bBc8fAE519d80278c47EbcD0449ACc373c4C",
+      "payee": "0xb5591f7fF0d02E026DC7cB8C7d057490Fa9a3f62",
+      "amount_base_units": "1000000",
+      "expires_at_unix": 1791008114,
+      "fund_tx": "0x9c4364dc9dec4323a2da4a61f14cb3c5a678a80a92797426a0c8cd9a27295b0d",
+      "terminal_tx": "0xa19b1b3159461762a904a9c5e7b7e35e3d95126e6ff5359b431c135e2c5a209d"
+    }
+  }
+}
