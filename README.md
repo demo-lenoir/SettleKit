@@ -1,46 +1,76 @@
 # SettleKit
 
-SettleKit tracks ERC-20 payments held in an escrow contract. A merchant creates a payment intent, a payer funds it from a wallet, and the service reports what the chain has actually confirmed. An operator can request the calldata for a full release or refund. The service never holds a wallet key or submits a payment transaction.
+SettleKit tracks token payments held in an on-chain escrow and tells a merchant when the payment has actually been confirmed.
 
-The project is a testnet reference implementation. The deployed contracts use a freely mintable mock token on Ethereum Sepolia. They have not had a professional security audit and must not receive real assets.
+A successful wallet transaction is not the whole story: a chain can reorganize, an API request can be retried, and a webhook receiver can be offline. SettleKit joins an ERC-20 escrow contract with a Go service, PostgreSQL state, and signed delivery notifications. It demonstrates how to keep an application payment record aligned with chain evidence while leaving wallet keys and transaction submission with the payer or operator.
 
-## Run it locally
+## Payment lifecycle
 
-Install Go 1.27.1, PostgreSQL 18 server tools, Foundry 1.8.4, Python 3, `jq`, `curl`, and `openssl`. From a checkout, run:
-
-```sh
-make anvil-test
+```mermaid
+flowchart LR
+  M[Merchant] --> API[Go payment API]
+  API --> DB[(PostgreSQL intents and outbox)]
+  API --> W[Unsigned wallet calldata]
+  W --> C[PaymentEscrow on EVM]
+  C --> I[Canonical log indexer]
+  I --> DB
+  DB --> H[HMAC webhook dispatcher]
+  H --> M
 ```
 
-The demo starts disposable PostgreSQL and Anvil instances. It creates and funds intents, waits for confirmations, releases and refunds separate escrows, verifies signed webhooks, restarts the service, reconciles a reorganization, and checks RPC failover. It uses local disposable accounts and sends no Sepolia transaction. [The demo guide](docs/demo.md) lists the assertions.
+A merchant creates an intent with an idempotency key. The payer signs `createAndFund`; the contract records the escrow and receives the exact token amount in one transaction. The indexer checks the observed terms against the intent and advances status after the configured confirmations. An operator can request unsigned calldata for a full release or refund, but only a canonical contract event changes the recorded money state.
 
-For focused checks, use `go test ./...`, `make db-test`, or `make contract-verify`. `make local-verify` runs the full local gate, including race and fuzz smoke tests, Slither, the Anvil scenario, a clean-clone run, vulnerability scans, an SBOM, and image provenance. `make verify` adds live Sepolia, Etherscan, and exact-commit GitHub CI checks; see [release verification](docs/release-plan.md).
+## Engineering focus
 
-## How a payment moves
+| Problem | Design and resulting behavior |
+| --- | --- |
+| A client retries intent creation. | A scoped idempotency record and response commit together in PostgreSQL; an identical retry returns the original response and a conflicting body is rejected. |
+| An ERC-20 transfer credits less than requested. | `createAndFund` checks the received balance atomically; a failed or undercredited transfer leaves no funded escrow. |
+| A chain reorganizes after confirmation. | Canonical blocks, history, checkpoint, and outbox update together; the local status can be reversed and replayed rather than treated as irreversible. |
+| The service or webhook receiver restarts. | Durable checkpoints and outbox entries survive restart. Webhooks use HMAC signatures and stable event IDs for receiver deduplication. |
+| Release and refund compete. | The contract permits one terminal full payout, with immutable payer and payee; expiry makes refund permissionless while new funding and release can be paused. |
+| A fallback RPC reports another chain or history. | Chain ID and stored checkpoint hash are checked before it can drive indexing; disagreement stops progress. |
 
-1. The merchant calls `POST /v1/payment-intents` with an `Idempotency-Key`. PostgreSQL stores the intent and the response in one transaction. Retrying the same request returns the same response.
-2. The payer signs the returned `createAndFund` call with a wallet. The contract records and receives the exact token amount atomically. A failed or undercredited transfer leaves no escrow.
-3. The indexer reads canonical blocks and contract logs, checks every funding term against the intent, and advances the status after the configured confirmation count. Its block checkpoint, state history, and outbox entry commit together.
-4. The dispatcher sends an HMAC-signed webhook. Delivery is at least once: receivers must verify the signature and timestamp and deduplicate event IDs.
-5. An authenticated operator may obtain unsigned release or refund calldata. The wallet signs and submits it. Only a canonical contract event changes the recorded money state.
+The [protocol specification](SPEC.md), [architecture](docs/architecture.md), and [failure/security review](docs/security-review.md) explain the guarantees and residual risks.
 
-The contract permits one terminal payout: full release to the recorded payee before expiry, or full refund to the recorded payer. After expiry, anyone can trigger the refund. Pausing blocks new funding and release, while refunds stay available. See [the protocol specification](SPEC.md) and [escrow ADR](docs/adr/0001-escrow-protocol.md).
+## Quick start
 
-## Failure boundaries
+Install Go 1.27.1, PostgreSQL 18 server tools, Foundry (`anvil`, `forge`), Python 3, `jq`, `curl`, and `openssl`. The local scenario starts disposable services and never sends a Sepolia transaction.
 
-| Failure | Behavior |
-|---|---|
-| Duplicate HTTP request | A scoped idempotency record returns the original response or rejects a conflicting body. |
-| Service restart | The indexer resumes from a durable checkpoint; pending webhook events remain in the outbox. |
-| Chain reorganization | Orphaned observations are reversed and the new canonical branch is replayed. A previously reported confirmation can be revoked. |
-| Deep or inconsistent fork | Indexing stops and readiness fails rather than guessing a payment state. Automatic reconciliation is bounded to 64 blocks and 1,000 affected intents. |
-| Receiver outage | Bounded retries use the same event ID and body. Exhausted events enter a dead letter queue for deliberate replay. |
-| RPC failover | The fallback must agree on chain ID and the stored checkpoint hash. Agreement does not establish provider honesty. |
+```sh
+git clone <repository-url> FinalSettleKit
+cd FinalSettleKit
+go mod download
+make anvil-test
+go test ./...
+```
 
-The API, indexer, and dispatcher live in [`internal/`](internal/); entry points are in [`cmd/`](cmd/). PostgreSQL constraints and forward-only migrations are in [`migrations/`](migrations/). The escrow and Foundry tests are in [`contracts/`](contracts/). The [architecture notes](docs/architecture.md), [OpenAPI contract](api/openapi.yaml), [threat model](docs/threat-model.md), and [runbook](docs/runbook.md) cover the interfaces and operating procedures.
+The scenario creates and funds intents, confirms them, releases and refunds separate escrows, verifies signed webhooks, restarts the service, tests reorganization reconciliation, and checks RPC failover. Follow the [demo guide](docs/demo.md) for its assertions. `make db-test` and `make contract-verify` provide focused checks.
+
+### Release verification
+
+`make local-verify` is the complete **local** gate: Go tests and race/fuzz smoke, PostgreSQL integration, Foundry tests, Slither, Anvil behavior, clean-clone replay, vulnerability scans, SBOM, and image metadata. The separate `make verify` also requires the current commit to be published, hosted CI for that exact commit, live Sepolia/Etherscan checks, and a release sidecar. That final publication gate is intentionally pending until those external artifacts exist; see the [release plan](docs/release-plan.md). A local pass must not be presented as hosted CI evidence.
 
 ## Sepolia evidence
 
-The [mock token](https://sepolia.etherscan.io/address/0xA119A6483116208EC8E8823c35566AeD782bE2bA#code) and [escrow](https://sepolia.etherscan.io/address/0x9c8C9e0507f837c7F38b24EDD90B49c4842F4a17#code) have verified source on Sepolia. Separate historical intents reached release and refund. Their transaction hashes and terms are in [`docs/sepolia-evidence.json`](docs/sepolia-evidence.json), with receipts and roles in [deployment evidence](docs/deployment-evidence.md). [Source identity](docs/source-identity.md) records how this standalone tree relates to the deployed contracts. The release checker verifies canonical receipts, events, calldata, participants, compiled runtime, verified source, and CI for the current commit when configured for its published repository. These historical transactions do not establish that the current backend revision ran on Sepolia; current backend behavior is covered by local integration tests.
+The verified [MockUSDC](https://sepolia.etherscan.io/address/0xA119A6483116208EC8E8823c35566AeD782bE2bA#code) contract was deployed in block 11830147 at **2 October 2026, 16:23:00 UTC** ([transaction](https://sepolia.etherscan.io/tx/0x676b183a2763a5743182f13f659672c915d07968948166db0b771db37234d7c1)). The verified [PaymentEscrow](https://sepolia.etherscan.io/address/0x9c8C9e0507f837c7F38b24EDD90B49c4842F4a17#code) contract was deployed in block 11830158 at **2 October 2026, 16:25:12 UTC** ([transaction](https://sepolia.etherscan.io/tx/0x2a6d8ef9536b66d5999b78bfae829ff7a158235ade3922ff715449eeb3ff6adc)). The [transaction manifest](docs/sepolia-evidence.json) and [deployment evidence](docs/deployment-evidence.md) include separate release and refund scenarios and their receipts. These on-chain records establish contract deployment and the recorded transactions; they do not prove that this backend revision processed them. Backend behavior is verified by local integration tests.
 
-Six confirmations were used for the Sepolia scenarios. No finite confirmation count makes a transaction irreversible. Historical webhook logs recorded successful HMAC validation, but the ephemeral secret and signatures were not retained for independent recomputation. The system has no production custody plan, independent audit, or production operating history. [Security review](docs/security-review.md) records accepted findings and residual risks.
+## Repository map
+
+```text
+cmd/             service and replay commands
+internal/        API, payments, indexer, store, webhook, telemetry
+contracts/       escrow, mock token, Foundry tests
+migrations/      PostgreSQL schema
+scripts/         local integration and release checks
+api/             OpenAPI contract
+docs/            operations, security, evidence, and ADRs
+```
+
+Read the [test evidence](docs/evidence.md), [OpenAPI contract](api/openapi.yaml), [runbook](docs/runbook.md), [threat model](docs/threat-model.md), and [ADRs](docs/adr/) for more detail. [Source identity](docs/source-identity.md) explains how the standalone source tree is checked against the deployed contracts.
+
+## Scope and trust
+
+The Sepolia token is freely mintable and has no monetary value. The contracts have no independent security audit and must not receive real assets. The service never holds wallet keys; webhook delivery is at least once and consumers must deduplicate events. Confirmation counts do not make chain history irreversible. Production custody, operations, and traffic testing remain outside this repository.
+
+Apache-2.0. See [LICENSE](LICENSE).
